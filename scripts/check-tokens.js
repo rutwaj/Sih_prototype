@@ -23,6 +23,7 @@ const SKIP_DIRS = new Set([
   "design",           // tokens.json lives here — allowed
   "scripts",          // this script itself
   "public",
+  "lib",              // lib/tokenColors.ts re-exports token hex values for runtime use
 ]);
 const SKIP_FILES = new Set([
   "tailwind.config.ts",  // token wiring lives here
