@@ -3,11 +3,10 @@
 /**
  * components/sim/SimControlPanel.tsx
  * Right-hand panel: scenario buttons, speed control, pause, event log.
- * Phase 4 will wire the actual simulation engine here.
- * Phase 3 stub: renders the full UI, but buttons only update store flags.
+ * Wired to the simulation engine (lib/simulation.ts) and Zustand store.
  */
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Flame,
   MountainSnow,
@@ -22,30 +21,37 @@ import Toggle from "@/components/ui/Toggle";
 import Tabs from "@/components/ui/Tabs";
 import TimelineRow from "@/components/ui/TimelineRow";
 import { useSimStore } from "@/store/simStore";
+import { runScenario, type ScenarioResult } from "@/lib/simulation";
+import type { ScenarioId } from "@/data/messages";
 
 type TabId = "controls" | "events";
 type SpeedValue = 1 | 2 | 4;
 
-const SCENARIOS = [
+const SCENARIOS: Array<{
+  id: ScenarioId;
+  label: string;
+  icon: React.ReactNode;
+  variant: "default" | "ghost" | "danger";
+}> = [
   {
-    id: "forest_fire" as const,
+    id: "forest_fire",
     label: "Forest Fire",
     icon: <Flame size={13} strokeWidth={1.5} />,
-    variant: "danger" as const,
+    variant: "danger",
   },
   {
-    id: "landslide" as const,
+    id: "landslide",
     label: "Landslide",
     icon: <MountainSnow size={13} strokeWidth={1.5} />,
-    variant: "ghost" as const,
+    variant: "ghost",
   },
   {
-    id: "flash_flood" as const,
+    id: "flash_flood",
     label: "Flash Flood",
     icon: <Droplets size={13} strokeWidth={1.5} />,
-    variant: "ghost" as const,
+    variant: "ghost",
   },
-] as const;
+];
 
 const SPEED_OPTIONS: SpeedValue[] = [1, 2, 4];
 
@@ -53,6 +59,7 @@ export default function SimControlPanel() {
   const [activeTab, setActiveTab] = useState<TabId>("controls");
 
   const {
+    nodes,
     simRunning,
     simSpeed,
     setSimRunning,
@@ -61,14 +68,150 @@ export default function SimControlPanel() {
     networkStatus,
     setNetworkStatus,
     events,
+    addEvent,
+    clearEvents,
+    updateNodeStatus,
+    setActiveAlert,
   } = useSimStore();
 
-  function handleScenario(scenarioId: string) {
-    // Phase 4: will call the simulation engine
-    // For now, just start the sim clock
-    setSimRunning(true);
-    console.log("Scenario triggered:", scenarioId);
-  }
+  // Pending replay queue: sorted events scheduled to fire
+  const pendingRef = useRef<Array<{ at: number; idx: number }>>([]);
+  const resultRef = useRef<ScenarioResult | null>(null);
+  const startWallRef = useRef<number>(0);
+  const pausedAtRef = useRef<number | null>(null); // wall-clock when paused
+  const accumulatedRef = useRef<number>(0); // total time already consumed before pause
+
+  /** Clear timers and replay state */
+  const clearReplay = useCallback(() => {
+    pendingRef.current = [];
+    resultRef.current = null;
+  }, []);
+
+  /** Trigger a scenario */
+  const handleScenario = useCallback(
+    (scenarioId: ScenarioId) => {
+      if (nodes.length === 0) return;
+
+      clearReplay();
+      clearEvents();
+      setActiveAlert(null);
+
+      const result = runScenario(scenarioId, nodes, networkStatus, new Date());
+      resultRef.current = result;
+
+      // Convert event timestamps → relative ms offsets from first event
+      const firstTs = new Date(result.events[0]?.timestamp ?? Date.now()).getTime();
+      pendingRef.current = result.events.map((_, idx) => ({
+        at: new Date(result.events[idx].timestamp).getTime() - firstTs,
+        idx,
+      }));
+
+      startWallRef.current = Date.now();
+      accumulatedRef.current = 0;
+      pausedAtRef.current = null;
+
+      setSimRunning(true);
+      setActiveTab("events");
+
+      // Set origin node to warning state immediately
+      updateNodeStatus(result.originNodeId, "warn");
+
+      // Set the active alert in store
+      setActiveAlert({
+        scenarioId,
+        triggeredAt: new Date().toISOString(),
+        affectedNodeIds: [result.originNodeId],
+        phase: "detecting",
+        confidence: 0,
+      });
+    },
+    [nodes, networkStatus, clearReplay, clearEvents, setActiveAlert, setSimRunning, updateNodeStatus],
+  );
+
+  /** Replay tick: drain pending events based on elapsed sim time */
+  useEffect(() => {
+    if (!simRunning) return;
+
+    const tickInterval = setInterval(() => {
+      const result = resultRef.current;
+      if (!result || pendingRef.current.length === 0) {
+        setSimRunning(false);
+        return;
+      }
+
+      const elapsed =
+        accumulatedRef.current +
+        (Date.now() - startWallRef.current) * simSpeed;
+
+      // Fire all events whose offset has been reached
+      const remaining: typeof pendingRef.current = [];
+      for (const item of pendingRef.current) {
+        if (item.at <= elapsed) {
+          const event = result.events[item.idx];
+          addEvent(event);
+
+          // Update node status based on event type
+          if (event.type === "sensor_confirmed") {
+            updateNodeStatus(event.nodeId, "critical");
+            setActiveAlert({
+              scenarioId: result.events[0].message.includes("Forest Fire")
+                ? "forest_fire"
+                : result.events[0].message.includes("Flash Flood")
+                ? "flash_flood"
+                : "landslide",
+              triggeredAt: event.timestamp,
+              affectedNodeIds: [result.originNodeId],
+              phase: "confirmed",
+              confidence: 94,
+            });
+          } else if (event.type === "mesh_hop") {
+            updateNodeStatus(event.nodeId, "warn");
+            // Add newly-affected nodes to alert
+            setActiveAlert((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    affectedNodeIds: [...new Set([...prev.affectedNodeIds, event.nodeId])],
+                    phase: "propagating",
+                  }
+                : prev,
+            );
+          } else if (event.type === "sensor_anomaly") {
+            updateNodeStatus(event.nodeId, "warn");
+          }
+        } else {
+          remaining.push(item);
+        }
+      }
+      pendingRef.current = remaining;
+
+      if (remaining.length === 0) {
+        setSimRunning(false);
+      }
+    }, 100);
+
+    return () => clearInterval(tickInterval);
+  }, [simRunning, simSpeed, addEvent, updateNodeStatus, setActiveAlert, setSimRunning]);
+
+  /** Handle pause / resume */
+  const handlePauseResume = useCallback(() => {
+    if (simRunning) {
+      // Pausing: record accumulated time
+      accumulatedRef.current += (Date.now() - startWallRef.current) * simSpeed;
+      pausedAtRef.current = Date.now();
+      setSimRunning(false);
+    } else {
+      // Resuming
+      startWallRef.current = Date.now();
+      setSimRunning(true);
+    }
+  }, [simRunning, simSpeed, setSimRunning]);
+
+  /** Full reset */
+  const handleReset = useCallback(() => {
+    clearReplay();
+    resetSim();
+  }, [clearReplay, resetSim]);
 
   return (
     <div className="flex flex-col h-full">
@@ -124,9 +267,9 @@ export default function SimControlPanel() {
               />
               <Toggle
                 checked={networkStatus.loraUp}
-                onChange={(v) => setNetworkStatus({ loraUp: v })}
+                onChange={() => {}}
                 label="LoRa mesh"
-                disabled={true}  // LoRa always works (solar-powered)
+                disabled={true}
               />
             </div>
             <p className="text-xs text-faint mt-2 leading-snug">
@@ -161,9 +304,8 @@ export default function SimControlPanel() {
                 variant="ghost"
                 size="sm"
                 icon={simRunning ? <Pause size={13} strokeWidth={1.5} /> : <Play size={13} strokeWidth={1.5} />}
-                onClick={() => setSimRunning(!simRunning)}
+                onClick={handlePauseResume}
                 className="flex-1 justify-center"
-                disabled={false}
               >
                 {simRunning ? "Pause" : "Resume"}
               </Button>
@@ -171,7 +313,7 @@ export default function SimControlPanel() {
                 variant="ghost"
                 size="sm"
                 icon={<RotateCcw size={13} strokeWidth={1.5} />}
-                onClick={resetSim}
+                onClick={handleReset}
                 className="flex-1 justify-center"
               >
                 Reset

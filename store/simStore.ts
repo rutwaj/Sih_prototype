@@ -44,7 +44,7 @@ interface SimState {
 
   // Active alert
   activeAlert: ActiveAlert | null;
-  setActiveAlert: (alert: ActiveAlert | null) => void;
+  setActiveAlert: (alert: ActiveAlert | null | ((prev: ActiveAlert | null) => ActiveAlert | null)) => void;
 
   // Selected node (for detail panel)
   selectedNodeId: string | null;
@@ -106,7 +106,13 @@ export const useSimStore = create<SimState>((set) => ({
 
   // Alert
   activeAlert: null,
-  setActiveAlert: (activeAlert) => set({ activeAlert }),
+  setActiveAlert: (alertOrUpdater) =>
+    set((state) => ({
+      activeAlert:
+        typeof alertOrUpdater === "function"
+          ? alertOrUpdater(state.activeAlert)
+          : alertOrUpdater,
+    })),
 
   // Selected node
   selectedNodeId: null,

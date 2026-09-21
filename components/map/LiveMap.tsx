@@ -15,6 +15,7 @@ import { NODES } from "@/data/nodes";
 import NodeMarkers from "./NodeMarkers";
 import MeshLinks from "./MeshLinks";
 import NodeDetailPanel from "./NodeDetailPanel";
+import AlertPanel from "@/components/alerts/AlertPanel";
 
 // India center coordinates for initial view
 const INDIA_CENTER: [number, number] = [20.5937, 78.9629];
@@ -84,6 +85,9 @@ export default function LiveMap() {
 
       {/* Node detail panel (overlaid) */}
       <NodeDetailPanel />
+
+      {/* Alert experience panel (overlaid, bottom-right) */}
+      <AlertPanel />
     </div>
   );
 }
