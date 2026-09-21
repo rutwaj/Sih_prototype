@@ -12,7 +12,6 @@ import {
   Flame,
   MountainSnow,
   Droplets,
-  Zap,
   Radio,
   RotateCcw,
   Play,

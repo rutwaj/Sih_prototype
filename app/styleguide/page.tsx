@@ -15,7 +15,7 @@ import Tabs from "@/components/ui/Tabs";
 import Toggle from "@/components/ui/Toggle";
 import Tooltip from "@/components/ui/Tooltip";
 import TimelineRow from "@/components/ui/TimelineRow";
-import { Flame, Droplets, Zap, Battery, Wifi } from "lucide-react";
+import { Flame, Zap, Battery, Wifi } from "lucide-react";
 
 type TabId = "colors" | "type" | "components";
 

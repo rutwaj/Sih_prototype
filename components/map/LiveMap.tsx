@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useRef } from "react";
-import { MapContainer, TileLayer, useMap } from "react-leaflet";
+import { MapContainer, TileLayer } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import { useSimStore } from "@/store/simStore";
 import { NODES } from "@/data/nodes";

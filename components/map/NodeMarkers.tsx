@@ -70,7 +70,7 @@ export default function NodeMarkers() {
                 {node.status.toUpperCase()}
               </span>
               <br />
-              <span style={{ color: "#8B96A0" }}>
+              <span style={{ color: TOKEN_COLORS.muted }}>
                 {node.type} · {node.region}
               </span>
             </div>
