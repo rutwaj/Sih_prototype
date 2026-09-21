@@ -2,9 +2,8 @@
 
 /**
  * components/map/LiveMap.tsx
- * Leaflet map with CARTO dark tiles.
+ * Leaflet map with Esri World Dark Gray Canvas tiles (keyless).
  * Loaded client-side only (ssr: false) to avoid Leaflet SSR issues.
- * Phase 3 will add markers, mesh links, and node detail panel.
  */
 
 import { useEffect, useRef } from "react";
@@ -66,12 +65,16 @@ export default function LiveMap() {
         zoomControl={false}
         attributionControl={true}
       >
-        {/* CARTO dark tiles — no API key required */}
+        {/* Esri World Dark Gray Canvas tiles — keyless dark basemap */}
         <TileLayer
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-          subdomains="abcd"
-          maxZoom={19}
+          url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
+          attribution="Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ"
+          maxZoom={16}
+        />
+        <TileLayer
+          url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}"
+          attribution=""
+          maxZoom={16}
         />
 
         {/* Node markers and mesh links */}

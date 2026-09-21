@@ -6,6 +6,7 @@ import {
   Map,
   BarChart3,
   Cpu,
+  Terminal,
   Info,
 } from "lucide-react";
 
@@ -13,6 +14,7 @@ const NAV_ITEMS = [
   { href: "/", icon: Map, label: "Live Map" },
   { href: "/compare", icon: BarChart3, label: "Compare" },
   { href: "/hardware", icon: Cpu, label: "Hardware" },
+  { href: "/hardware-lab", icon: Terminal, label: "Hardware Lab" },
   { href: "/about", icon: Info, label: "About" },
 ] as const;
 
