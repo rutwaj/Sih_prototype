@@ -26,11 +26,6 @@ export interface ScenarioResult {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-let _eventSeq = 0;
-function makeId(): string {
-  return `evt-${Date.now()}-${++_eventSeq}`;
-}
-
 function msToIso(baseTime: Date, offsetMs: number): string {
   return new Date(baseTime.getTime() + offsetMs).toISOString();
 }
@@ -42,9 +37,10 @@ function makeEvent(
   severity: SimEvent["severity"],
   baseTime: Date,
   offsetMs: number,
+  seq: number,
 ): SimEvent {
   return {
-    id: makeId(),
+    id: `evt-${baseTime.getTime()}-${offsetMs}-${seq}-${nodeId}`,
     type,
     nodeId,
     timestamp: msToIso(baseTime, offsetMs),
@@ -67,37 +63,37 @@ function forestFireEvents(
 
   // t=0  Scenario start
   events.push(makeEvent("scenario_start", id,
-    `Scenario: Forest Fire triggered at ${id} — ${name}`, "info", baseTime, 0));
+    `Scenario: Forest Fire triggered at ${id} — ${name}`, "info", baseTime, 0, 1));
 
   // t=500ms  Acoustic anomaly
   events.push(makeEvent("sensor_anomaly", id,
-    `${id}: Acoustic anomaly — 78 dB (baseline 35 dB)`, "warn", baseTime, 500));
+    `${id}: Acoustic anomaly — 78 dB (baseline 35 dB)`, "warn", baseTime, 500, 2));
 
   // t=1200ms  Thermal check
   events.push(makeEvent("sensor_anomaly", id,
-    `${id}: Thermal elevated — 68 °C surface (baseline 28 °C)`, "warn", baseTime, 1200));
+    `${id}: Thermal elevated — 68 °C surface (baseline 28 °C)`, "warn", baseTime, 1200, 3));
 
   // t=2000ms  Smoke confirmed
   events.push(makeEvent("sensor_anomaly", id,
-    `${id}: Smoke rising — 62 ppm (anomaly >50 ppm)`, "warn", baseTime, 2000));
+    `${id}: Smoke rising — 62 ppm (anomaly >50 ppm)`, "warn", baseTime, 2000, 4));
 
   // t=2500ms  Confirmed
   events.push(makeEvent("sensor_confirmed", id,
-    `${id}: FIRE CONFIRMED — confidence 94%. Mesh alert propagating.`, "critical", baseTime, 2500));
+    `${id}: FIRE CONFIRMED — confidence 94%. Mesh alert propagating.`, "critical", baseTime, 2500, 5));
 
   // t=2600ms  Alert sent (via whichever links are available)
   const linkType = networkStatus.cellUp ? "cell" : networkStatus.loraUp ? "LoRa" : "satellite";
   events.push(makeEvent("alert_sent", id,
-    `${id}: Alert dispatched via ${linkType.toUpperCase()} — calls + WhatsApp to regional contacts`, "critical", baseTime, 2600));
+    `${id}: Alert dispatched via ${linkType.toUpperCase()} — calls + WhatsApp to regional contacts`, "critical", baseTime, 2600, 6));
 
   // Mesh propagation
   const graph = buildMeshGraph(nodes);
   const hops = propagateMesh(id, graph, 900);
 
-  hops.forEach((hop) => {
+  hops.forEach((hop, idx) => {
     events.push(makeEvent("mesh_hop", hop.nodeId,
       `Mesh hop ${hop.hopCount}: ${hop.nodeId} — alert received, relaying`,
-      "info", baseTime, 2500 + hop.delayMs));
+      "info", baseTime, 2500 + hop.delayMs, 7 + idx));
   });
 
   return { events, originNodeId: id, meshHops: hops };
@@ -114,31 +110,31 @@ function flashFloodEvents(
   const name = originNode.name;
 
   events.push(makeEvent("scenario_start", id,
-    `Scenario: Flash Flood triggered at ${id} — ${name}`, "info", baseTime, 0));
+    `Scenario: Flash Flood triggered at ${id} — ${name}`, "info", baseTime, 0, 1));
 
   events.push(makeEvent("sensor_anomaly", id,
-    `${id}: Water level rising — +6 cm/min (alert threshold >5 cm/min)`, "warn", baseTime, 400));
+    `${id}: Water level rising — +6 cm/min (alert threshold >5 cm/min)`, "warn", baseTime, 400, 2));
 
   events.push(makeEvent("sensor_anomaly", id,
-    `${id}: Turbidity spike — 142 NTU (baseline <10 NTU)`, "warn", baseTime, 900));
+    `${id}: Turbidity spike — 142 NTU (baseline <10 NTU)`, "warn", baseTime, 900, 3));
 
   events.push(makeEvent("sensor_anomaly", id,
-    `${id}: Upstream node chain confirms rate-of-rise trend`, "warn", baseTime, 1500));
+    `${id}: Upstream node chain confirms rate-of-rise trend`, "warn", baseTime, 1500, 4));
 
   events.push(makeEvent("sensor_confirmed", id,
-    `${id}: FLOOD CONFIRMED — water +42 cm from baseline, rate +6 cm/min. Confidence 91%.`, "critical", baseTime, 2000));
+    `${id}: FLOOD CONFIRMED — water +42 cm from baseline, rate +6 cm/min. Confidence 91%.`, "critical", baseTime, 2000, 5));
 
   const linkType = networkStatus.cellUp ? "cell" : networkStatus.loraUp ? "LoRa" : "satellite";
   events.push(makeEvent("alert_sent", id,
-    `${id}: Alert dispatched via ${linkType.toUpperCase()} — evacuation message sent to all contacts`, "critical", baseTime, 2100));
+    `${id}: Alert dispatched via ${linkType.toUpperCase()} — evacuation message sent to all contacts`, "critical", baseTime, 2100, 6));
 
   const graph = buildMeshGraph(nodes);
   const hops = propagateMesh(id, graph, 900);
 
-  hops.forEach((hop) => {
+  hops.forEach((hop, idx) => {
     events.push(makeEvent("mesh_hop", hop.nodeId,
       `Mesh hop ${hop.hopCount}: ${hop.nodeId} — flood alert received, relaying`,
-      "info", baseTime, 2000 + hop.delayMs));
+      "info", baseTime, 2000 + hop.delayMs, 7 + idx));
   });
 
   return { events, originNodeId: id, meshHops: hops };
@@ -155,31 +151,31 @@ function landslideEvents(
   const name = originNode.name;
 
   events.push(makeEvent("scenario_start", id,
-    `Scenario: Landslide triggered at ${id} — ${name}`, "info", baseTime, 0));
+    `Scenario: Landslide triggered at ${id} — ${name}`, "info", baseTime, 0, 1));
 
   events.push(makeEvent("sensor_anomaly", id,
-    `${id}: Seismic micro-tremors detected — slope instability signal`, "warn", baseTime, 300));
+    `${id}: Seismic micro-tremors detected — slope instability signal`, "warn", baseTime, 300, 2));
 
   events.push(makeEvent("sensor_anomaly", id,
-    `${id}: Soil moisture saturation — 94% (critical >90%)`, "warn", baseTime, 800));
+    `${id}: Soil moisture saturation — 94% (critical >90%)`, "warn", baseTime, 800, 3));
 
   events.push(makeEvent("sensor_anomaly", id,
-    `${id}: Acoustic crack pattern — slope movement initiated`, "warn", baseTime, 1400));
+    `${id}: Acoustic crack pattern — slope movement initiated`, "warn", baseTime, 1400, 4));
 
   events.push(makeEvent("sensor_confirmed", id,
-    `${id}: LANDSLIDE CONFIRMED — slope movement >8 cm. Confidence 88%.`, "critical", baseTime, 2000));
+    `${id}: LANDSLIDE CONFIRMED — slope movement >8 cm. Confidence 88%.`, "critical", baseTime, 2000, 5));
 
   const linkType = networkStatus.cellUp ? "cell" : networkStatus.loraUp ? "LoRa" : "satellite";
   events.push(makeEvent("alert_sent", id,
-    `${id}: Landslide alert via ${linkType.toUpperCase()} — evacuate hillside roads immediately`, "critical", baseTime, 2100));
+    `${id}: Landslide alert via ${linkType.toUpperCase()} — evacuate hillside roads immediately`, "critical", baseTime, 2100, 6));
 
   const graph = buildMeshGraph(nodes);
   const hops = propagateMesh(id, graph, 900);
 
-  hops.forEach((hop) => {
+  hops.forEach((hop, idx) => {
     events.push(makeEvent("mesh_hop", hop.nodeId,
       `Mesh hop ${hop.hopCount}: ${hop.nodeId} — landslide alert received, relaying`,
-      "info", baseTime, 2000 + hop.delayMs));
+      "info", baseTime, 2000 + hop.delayMs, 7 + idx));
   });
 
   return { events, originNodeId: id, meshHops: hops };
